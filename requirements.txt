@@ -1,0 +1,17 @@
+fastapi==0.115.*
+uvicorn[standard]==0.32.*
+python-multipart
+numpy
+scikit-learn
+joblib
+pandas
+tqdm
+librosa
+soundfile
+scipy
+torch
+torchaudio
+transformers
+openai-whisper
+pytest
+httpx

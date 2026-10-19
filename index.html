@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project XØ — Voice Clone Detector (test page)</title>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --fg:#e8eaf0; --mut:#8b92a5; --ok:#2fbf71; --mid:#f0b429; --bad:#ef4444; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); padding:24px 16px; }
+  .wrap { max-width:720px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.sub { color:var(--mut); margin:0 0 20px; }
+  .card { background:var(--card); border-radius:12px; padding:18px; margin-bottom:16px; }
+  button { background:#3b82f6; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-size:15px; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  input[type=file] { color:var(--mut); }
+  .gauge { height:16px; background:#2a2f3a; border-radius:8px; overflow:hidden; margin:10px 0 6px; }
+  .gauge > div { height:100%; width:0; transition:width .6s, background .6s; }
+  .big { font-size:34px; font-weight:700; }
+  .tl { display:flex; gap:3px; height:28px; margin-top:8px; }
+  .tl div { flex:1; border-radius:4px; }
+  ul { padding-left:18px; margin:8px 0 0; }
+  .mut { color:var(--mut); font-size:13px; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Project XØ</h1>
+  <p class="sub">Cloned-voice fraud detector. Test page: Ishrit builds the real UI against the same API.</p>
+
+  <div class="card">
+    <label>API URL <input id="api" value="http://localhost:8000" style="width:260px"></label>
+    <span class="mut" id="mode"></span>
+    <hr style="border:0;border-top:1px solid #2a2f3a;margin:14px 0">
+    <input type="file" id="file" accept="audio/*">
+    <button id="go">Analyze</button>
+    <button id="rec" style="background:#6b7280">Record 6 s (mic)</button>
+    <div id="msg" class="mut" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card" id="out" style="display:none">
+    <div class="mut">Fraud risk</div>
+    <div class="big" id="pct">0%</div>
+    <div id="lvl" class="mut"></div>
+    <div class="gauge"><div id="bar"></div></div>
+    <div class="mut">Segments (synthetic score over time)</div>
+    <div class="tl" id="tl"></div>
+    <div class="mut" style="margin-top:14px">Why</div>
+    <ul id="why"></ul>
+    <div class="mut" style="margin-top:14px">Transcript</div>
+    <div id="tr" class="mut"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const color = s => s >= .7 ? 'var(--bad)' : s >= .4 ? 'var(--mid)' : 'var(--ok)';
+
+async function health() {
+  try {
+    const r = await fetch($('api').value + '/health'); const j = await r.json();
+    $('mode').textContent = ' backend: ' + j.mode;
+  } catch { $('mode').textContent = ' backend unreachable'; }
+}
+health(); $('api').addEventListener('change', health);
+
+async function analyze(blob, name) {
+  $('msg').textContent = 'Analyzing...'; $('msg').className = 'mut';
+  const fd = new FormData(); fd.append('file', blob, name);
+  try {
+    const r = await fetch($('api').value + '/analyze', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.status);
+    show(j); $('msg').textContent = '';
+  } catch (e) { $('msg').textContent = 'Error: ' + e.message; $('msg').className = 'err'; }
+}
+
+function show(j) {
+  $('out').style.display = 'block';
+  $('pct').textContent = Math.round(j.score * 100) + '%  ' + (j.label === 'synthetic' ? 'LIKELY CLONED' : 'LIKELY GENUINE');
+  $('pct').style.color = color(j.score);
+  $('lvl').textContent = 'Risk level: ' + j.risk_level + ' · confidence ' + Math.round(j.confidence * 100) + '%';
+  $('bar').style.width = Math.round(j.score * 100) + '%'; $('bar').style.background = color(j.score);
+  $('tl').innerHTML = (j.segments || []).map(s =>
+    `<div title="${s.start}s-${s.end}s: ${s.score}" style="background:${color(s.score)}"></div>`).join('');
+  $('why').innerHTML = (j.reasons || []).map(r => `<li>${r.replace(/</g,'&lt;')}</li>`).join('') || '<li class="mut">No flags</li>';
+  $('tr').textContent = j.transcript || '(no transcript)';
+}
+
+$('go').onclick = () => { const f = $('file').files[0]; if (f) analyze(f, f.name); else $('msg').textContent = 'Pick an audio file first'; };
+
+$('rec').onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mr = new MediaRecorder(stream); const chunks = [];
+    mr.ondataavailable = e => chunks.push(e.data);
+    mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); analyze(new Blob(chunks, { type: 'audio/webm' }), 'mic.webm'); };
+    $('msg').textContent = 'Recording 6 s...'; mr.start(); setTimeout(() => mr.stop(), 6000);
+  } catch { $('msg').textContent = 'Microphone not available'; $('msg').className = 'err'; }
+};
+</script>
+</body>
+</html>

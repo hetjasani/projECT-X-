@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+.env
+data/*
+!data/.gitkeep
+*.joblib
+*.npy
+*.pt
+*.pth
+*.wav
+*.mp3
+*.flac
+.pytest_cache/
+.ipynb_checkpoints/
